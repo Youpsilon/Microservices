@@ -1,21 +1,28 @@
 {
   "compilerOptions": {
-    "composite": true,
-    "declarationMap": true,
-    "emitDeclarationOnly": true,
-    "importHelpers": true,
-    "isolatedModules": true,
-    "lib": ["es2022"],
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "noEmitOnError": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true,
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "incremental": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "es2022",
-    "customConditions": ["@restaurant-app/source"]
+    "strictPropertyInitialization": false,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@restaurant/shared-types": ["packages/shared-types/src/index.ts"],
+      "@restaurant/shared-types/*": ["packages/shared-types/src/*"],
+      "@restaurant/amqp-utils": ["packages/amqp-utils/src/index.ts"],
+      "@restaurant/amqp-utils/*": ["packages/amqp-utils/src/*"],
+      "@restaurant/auth-guard": ["packages/auth-guard/src/index.ts"],
+      "@restaurant/auth-guard/*": ["packages/auth-guard/src/*"]
+    }
   }
 }

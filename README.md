@@ -1,109 +1,88 @@
-# RestaurantApp
+# Le Gourmet — Architecture Microservices Restaurant
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+Bienvenue dans le dépôt du projet de gestion de commandes pour restaurant, conçu en architecture microservices.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+## Prérequis
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+- [Node.js](https://nodejs.org/) (v20+)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (doit être **lancé** sur votre machine)
+- [npm](https://www.npmjs.com/)
 
-## Generate a library
+## Structure du projet (Monorepo)
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+Le projet utilise les npm workspaces pour gérer les microservices et le front-end React.
+
+```text
+/packages
+  /amqp-utils       # Utilitaire partagé RabbitMQ
+  /auth-guard       # Librairie partagée (JWT, RBAC)
+  /shared-types     # Types communs (DTOs, Events)
+  /auth-service     # Port 3001
+  /menu-service     # Port 3002
+  /order-service    # Port 3003
+  /kitchen-service  # Port 3004
+  /delivery-service # Port 3005
+  /web-client       # Front-end React (Vite) - Port 5173
 ```
 
-## Run tasks
+## Comment lancer le projet en local
 
-To build the library use:
+### 1. Démarrer l'infrastructure (Bases de données & RabbitMQ)
 
-```sh
-npx nx build pkg1
+Avant de lancer le code Node.js, vous devez lancer les conteneurs Docker qui contiennent PostgreSQL, RabbitMQ, Redis, et Jaeger.
+**Assurez-vous que Docker Desktop est ouvert.**
+
+Dans un terminal, à la racine du projet (`C:\Users\coues\OneDrive\Documents\Microservices\restaurant-app`), exécutez :
+
+```bash
+npm run infra:up
 ```
 
-To run any task with Nx use:
+> 💡 *Note : Si c'est la première fois, Docker va télécharger les images (PostgreSQL, RabbitMQ, etc.), cela peut prendre quelques minutes.*
 
-```sh
-npx nx <target> <project-name>
+### 2. Installer les dépendances
+
+Installez toutes les dépendances pour tous les microservices et le front-end en une seule commande depuis la racine :
+
+```bash
+npm install
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+### 3. Lancer les microservices (Back-end)
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+Ouvrez **plusieurs terminaux** (ou utilisez un outil de multiplexage), et lancez chaque service. Ils se connecteront automatiquement à RabbitMQ et à leur propre base de données PostgreSQL. Le service Menu créera même des plats par défaut automatiquement !
 
-## Versioning and releasing
+```bash
+# Terminal 1
+npm run dev:auth
 
-To version and release the library use
+# Terminal 2
+npm run dev:menu
 
+# Terminal 3
+npm run dev:order
 ```
-npx nx release
-```
+*(Vous pouvez lancer kitchen et delivery plus tard si vous vous concentrez sur l'itération 1).*
 
-Pass `--dry-run` to see what would happen without actually releasing the library.
+### 4. Lancer le Front-end React (Web Client)
 
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+Dans un nouveau terminal, lancez le client web React. Il va démarrer sur le port 5173 et son proxy va rediriger les appels API vers les bons microservices.
 
-## Keep TypeScript project references up to date
-
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
-
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
-
-```sh
-npx nx sync
+```bash
+npm run dev:web
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+👉 Ouvrez votre navigateur sur **http://localhost:5173**
 
-```sh
-npx nx sync:check
-```
+### 5. Tester l'application
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+1. Cliquez sur **Menu** pour voir les plats (le `menu-service` a généré un menu par défaut).
+2. Cliquez sur **Inscription** pour vous créer un compte client.
+3. Une fois connecté, vous verrez votre nom en haut à droite.
 
-## Set up CI!
+---
 
-### Step 1
+### Commandes utiles
 
-To connect to Nx Cloud, run the following command:
-
-```sh
-npx nx connect
-```
-
-Connecting to Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Step 2
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
-```
-
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Install Nx Console
-
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
-
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Useful links
-
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- Arrêter l'infrastructure Docker sans supprimer les données : `npm run infra:down`
+- Réinitialiser l'infrastructure (supprime les bases de données) : `npm run infra:reset`

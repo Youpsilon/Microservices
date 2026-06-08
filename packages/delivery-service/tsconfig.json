@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "../../dist/delivery-service", "rootDir": "src" },
+  "include": ["src/**/*"]
+}

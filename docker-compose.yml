@@ -1,0 +1,190 @@
+
+services:
+  # ─── Databases ───
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: pg-auth
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev
+    ports:
+      - '5433:5432'
+    volumes:
+      - pg-auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-menu:
+    image: postgres:16-alpine
+    container_name: pg-menu
+    environment:
+      POSTGRES_DB: menu
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev
+    ports:
+      - '5434:5432'
+    volumes:
+      - pg-menu-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-orders:
+    image: postgres:16-alpine
+    container_name: pg-orders
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev
+    ports:
+      - '5435:5432'
+    volumes:
+      - pg-orders-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-kitchen:
+    image: postgres:16-alpine
+    container_name: pg-kitchen
+    environment:
+      POSTGRES_DB: kitchen
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev
+    ports:
+      - '5436:5432'
+    volumes:
+      - pg-kitchen-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-delivery:
+    image: postgres:16-alpine
+    container_name: pg-delivery
+    environment:
+      POSTGRES_DB: delivery
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev
+    ports:
+      - '5437:5432'
+    volumes:
+      - pg-delivery-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Message Broker ───
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ─── Cache ───
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Observability ───
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - '16686:16686'  # UI
+      - '4318:4318'    # OTLP HTTP
+      - '6831:6831/udp' # Thrift
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+
+  # ─── Application Services ───
+  # NOTE: These services are defined here for Chaos Testing demos (docker stop <container>).
+  # For development, use 'npm run dev:<service>' scripts which provide hot-reload.
+  # To start all services in Docker: uncomment and run 'docker compose --profile full up -d'
+
+  # kitchen-service:
+  #   build:
+  #     context: .
+  #     dockerfile: packages/kitchen-service/Dockerfile
+  #   container_name: kitchen-service
+  #   profiles: ['full']
+  #   environment:
+  #     DB_HOST: postgres-kitchen
+  #     DB_PORT: 5432
+  #     DB_USER: postgres
+  #     DB_PASSWORD: dev
+  #     DB_NAME: kitchen
+  #     AMQP_URL: amqp://guest:guest@rabbitmq:5672
+  #     JWT_SECRET: dev-secret-change-in-prod
+  #     PORT: 3004
+  #   ports:
+  #     - '3004:3004'
+  #   depends_on:
+  #     postgres-kitchen:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+
+  # delivery-service:
+  #   build:
+  #     context: .
+  #     dockerfile: packages/delivery-service/Dockerfile
+  #   container_name: delivery-service
+  #   profiles: ['full']
+  #   environment:
+  #     DB_HOST: postgres-delivery
+  #     DB_PORT: 5432
+  #     DB_USER: postgres
+  #     DB_PASSWORD: dev
+  #     DB_NAME: delivery
+  #     AMQP_URL: amqp://guest:guest@rabbitmq:5672
+  #     JWT_SECRET: dev-secret-change-in-prod
+  #     PORT: 3005
+  #   ports:
+  #     - '3005:3005'
+  #   depends_on:
+  #     postgres-delivery:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+
+volumes:
+  pg-auth-data:
+  pg-menu-data:
+  pg-orders-data:
+  pg-kitchen-data:
+  pg-delivery-data:
+  rabbitmq-data:
+  redis-data:
