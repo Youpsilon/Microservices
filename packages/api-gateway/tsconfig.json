@@ -2,7 +2,6 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../../dist/api-gateway",
-    "rootDir": "src"
   },
   "include": ["src/**/*"]
 }

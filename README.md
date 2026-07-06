@@ -4,13 +4,11 @@ Bienvenue dans le dépôt du projet de gestion de commandes pour restaurant, con
 
 ## Prérequis
 
-- [Node.js](https://nodejs.org/) (v20+)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (doit être **lancé** sur votre machine)
-- [npm](https://www.npmjs.com/)
+- [Node.js](https://nodejs.org/) v20+ *(uniquement pour le mode développement local)*
+- [npm](https://www.npmjs.com/) *(uniquement pour le mode développement local)*
 
 ## Structure du projet (Monorepo)
-
-Le projet utilise les npm workspaces pour gérer les microservices et le front-end React.
 
 ```text
 /packages
@@ -22,67 +20,159 @@ Le projet utilise les npm workspaces pour gérer les microservices et le front-e
   /order-service    # Port 3003
   /kitchen-service  # Port 3004
   /delivery-service # Port 3005
+  /api-gateway      # Port 3000
   /web-client       # Front-end React (Vite) - Port 5173
 ```
 
-## Comment lancer le projet en local
+---
 
-### 1. Démarrer l'infrastructure (Bases de données & RabbitMQ)
+## 🐳 Lancer le projet avec Docker (recommandé)
 
-Avant de lancer le code Node.js, vous devez lancer les conteneurs Docker qui contiennent PostgreSQL, RabbitMQ, Redis, et Jaeger.
-**Assurez-vous que Docker Desktop est ouvert.**
+Cette méthode lance **tout** le projet en une seule commande : bases de données, broker, cache, et tous les microservices.
 
-Dans un terminal, à la racine du projet (`C:\Users\coues\OneDrive\Documents\Microservices\restaurant-app`), exécutez :
+### Prérequis : Docker Desktop doit être ouvert.
+
+### 1. Lancer tous les services
+
+Depuis la racine du projet :
+
+```bash
+docker compose --profile full up -d --build
+```
+
+> 💡 Le flag `--build` recompile les images si le code a changé. Vous pouvez l'omettre après le premier lancement pour démarrer plus vite.
+
+Docker va démarrer dans l'ordre :
+
+| Service | URL |
+|---|---|
+| **Web Client (React)** | http://localhost:5173 |
+| **API Gateway** | http://localhost:3000 |
+| **Auth Service** | http://localhost:3001 |
+| **Menu Service** | http://localhost:3002 |
+| **Order Service** | http://localhost:3003 |
+| **Kitchen Service** | http://localhost:3004 |
+| **Delivery Service** | http://localhost:3005 |
+| **RabbitMQ Management** | http://localhost:15672 *(guest / guest)* |
+| **Jaeger (Tracing)** | http://localhost:16686 |
+
+### 2. Vérifier que tout tourne
+
+```bash
+docker compose ps
+```
+
+Tous les services doivent être à l'état `running`.
+
+### 3. Voir les logs d'un service
+
+```bash
+# Logs en temps réel de tous les services
+docker compose logs -f
+
+# Logs d'un service spécifique
+docker compose logs -f order-service
+docker compose logs -f api-gateway
+```
+
+### 4. Arrêter le projet
+
+```bash
+# Arrêter sans supprimer les données
+docker compose --profile full down
+
+# Arrêter ET supprimer toutes les données (reset complet)
+docker compose --profile full down -v
+```
+
+---
+
+## 💻 Lancer le projet en mode développement local
+
+Utilisez ce mode si vous souhaitez modifier le code et voir les changements en temps réel.
+
+### 1. Démarrer l'infrastructure (Bases de données, RabbitMQ, Redis, Jaeger)
 
 ```bash
 npm run infra:up
 ```
 
-> 💡 *Note : Si c'est la première fois, Docker va télécharger les images (PostgreSQL, RabbitMQ, etc.), cela peut prendre quelques minutes.*
+> 💡 *Note : Si c'est la première fois, Docker va télécharger les images, cela peut prendre quelques minutes.*
 
 ### 2. Installer les dépendances
-
-Installez toutes les dépendances pour tous les microservices et le front-end en une seule commande depuis la racine :
 
 ```bash
 npm install
 ```
 
-### 3. Lancer les microservices (Back-end)
-
-Ouvrez **plusieurs terminaux** (ou utilisez un outil de multiplexage), et lancez chaque service. Ils se connecteront automatiquement à RabbitMQ et à leur propre base de données PostgreSQL. Le service Menu créera même des plats par défaut automatiquement !
+### 3. Lancer tous les services en une seule commande
 
 ```bash
-# Terminal 1
+npm run dev:all
+```
+
+Ou lancez chaque service dans un terminal séparé :
+
+```bash
+# Terminal 1 — Auth
 npm run dev:auth
 
-# Terminal 2
+# Terminal 2 — Menu
 npm run dev:menu
 
-# Terminal 3
+# Terminal 3 — Orders
 npm run dev:order
-```
-*(Vous pouvez lancer kitchen et delivery plus tard si vous vous concentrez sur l'itération 1).*
 
-### 4. Lancer le Front-end React (Web Client)
+# Terminal 4 — Kitchen
+npm run dev:kitchen
 
-Dans un nouveau terminal, lancez le client web React. Il va démarrer sur le port 5173 et son proxy va rediriger les appels API vers les bons microservices.
+# Terminal 5 — Delivery
+npm run dev:delivery
 
-```bash
+# Terminal 6 — API Gateway
+npm run dev:gateway
+
+# Terminal 7 — Front-end React
 npm run dev:web
 ```
 
 👉 Ouvrez votre navigateur sur **http://localhost:5173**
 
-### 5. Tester l'application
+### Commandes utiles
 
-1. Cliquez sur **Menu** pour voir les plats (le `menu-service` a généré un menu par défaut).
-2. Cliquez sur **Inscription** pour vous créer un compte client.
-3. Une fois connecté, vous verrez votre nom en haut à droite.
+| Commande | Description |
+|---|---|
+| `npm run infra:up` | Démarre l'infrastructure Docker (BDD, broker, cache) |
+| `npm run infra:down` | Arrête l'infrastructure sans supprimer les données |
+| `npm run infra:reset` | Réinitialise l'infrastructure (supprime les bases de données) |
+| `npm run dev:all` | Lance tous les microservices et le front-end en parallèle |
 
 ---
 
-### Commandes utiles
+## Tester l'application
 
-- Arrêter l'infrastructure Docker sans supprimer les données : `npm run infra:down`
-- Réinitialiser l'infrastructure (supprime les bases de données) : `npm run infra:reset`
+1. Ouvrez **http://localhost:5173**
+2. Utilisez les comptes ci-dessous pour tester chaque rôle.
+
+---
+
+## 👤 Comptes de test (pré-créés)
+
+Les comptes suivants sont déjà créés dans la base de données. Connectez-vous directement.
+
+| Rôle | Email | Mot de passe | Accès |
+|---|---|---|---|
+| **Client** | `client@restaurant.fr` | `Client123!` | Passer des commandes, voir son historique |
+| **Admin** | `admin@restaurant.fr` | `Admin123!` | Gérer le menu, voir toutes les commandes, changer les statuts |
+| **Chef** | `chef@restaurant.fr` | `Chef123!` | Tableau de bord cuisine, mettre à jour les statuts de préparation |
+| **Livreur** | `livreur@restaurant.fr` | `Livreur123!` | Tableau de bord livraison, mettre à jour les livraisons |
+
+> ⚠️ Ces comptes sont en base tant que Docker tourne avec ses volumes. Un `docker compose down -v` les supprime.
+> Pour recréer les rôles via psql, utilisez le format **plain** (pas JSON) car TypeORM utilise `simple-array` :
+> ```sql
+> UPDATE users SET roles = 'admin' WHERE email = 'admin@restaurant.fr';
+> UPDATE users SET roles = 'chef'  WHERE email = 'chef@restaurant.fr';
+> UPDATE users SET roles = 'livreur' WHERE email = 'livreur@restaurant.fr';
+> ```
+
+

@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, CheckCircle, XCircle, Clock, ChefHat, Bike, PackageCheck } from 'lucide-react';
 import api from '../services/api';
 
-type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivering' | 'delivered' | 'completed' | 'cancelled';
 
 interface OrderItem {
   id: string;
@@ -23,21 +23,27 @@ interface Order {
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  pending:   { label: 'En attente',    color: '#FCD34D', icon: <Clock size={14} /> },
-  confirmed: { label: 'Confirmée',     color: '#60A5FA', icon: <CheckCircle size={14} /> },
-  preparing: { label: 'En préparation', color: '#F97316', icon: <ChefHat size={14} /> },
-  ready:     { label: 'Prête',         color: '#34D399', icon: <PackageCheck size={14} /> },
-  delivered: { label: 'Livrée',        color: '#A78BFA', icon: <Bike size={14} /> },
-  cancelled: { label: 'Annulée',       color: '#F87171', icon: <XCircle size={14} /> },
+  pending:    { label: 'En attente',    color: '#FCD34D', icon: <Clock size={14} /> },
+  confirmed:  { label: 'Confirmée',     color: '#60A5FA', icon: <CheckCircle size={14} /> },
+  preparing:  { label: 'En préparation', color: '#F97316', icon: <ChefHat size={14} /> },
+  ready:      { label: 'Prête',         color: '#34D399', icon: <PackageCheck size={14} /> },
+  picked_up:  { label: 'Récupérée',     color: '#F59E0B', icon: <Bike size={14} /> },
+  delivering: { label: 'En livraison',  color: '#8B5CF6', icon: <Bike size={14} /> },
+  delivered:  { label: 'Livrée',        color: '#A78BFA', icon: <CheckCircle size={14} /> },
+  completed:  { label: 'Terminée',      color: '#10B981', icon: <CheckCircle size={14} /> },
+  cancelled:  { label: 'Annulée',       color: '#F87171', icon: <XCircle size={14} /> },
 };
 
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending:   ['confirmed', 'cancelled'],
-  confirmed: ['preparing', 'cancelled'],
-  preparing: ['ready'],
-  ready:     ['delivered'],
-  delivered: [],
-  cancelled: [],
+  pending:    ['confirmed', 'cancelled'],
+  confirmed:  ['preparing', 'cancelled'],
+  preparing:  ['ready'],
+  ready:      ['picked_up'],
+  picked_up:  ['delivering'],
+  delivering: ['delivered'],
+  delivered:  ['completed'],
+  completed:  [],
+  cancelled:  [],
 };
 
 export default function AdminOrders() {
@@ -58,15 +64,14 @@ export default function AdminOrders() {
     setLoading(true);
     setError(null);
     try {
-      const params = filterStatus ? `?status=${filterStatus}` : '';
-      const res = await api.get(`/orders${params}`);
+      const res = await api.get('/orders?limit=1000');
       setOrders(res.data.data || []);
     } catch {
       setError('Impossible de charger les commandes.');
     } finally {
       setLoading(false);
     }
-  }, [filterStatus]);
+  }, []);
 
   useEffect(() => {
     fetchOrders();
@@ -88,6 +93,7 @@ export default function AdminOrders() {
   };
 
   const allStatuses = Object.keys(STATUS_CONFIG) as OrderStatus[];
+  const filteredOrders = orders.filter(o => !filterStatus || o.status === filterStatus);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -115,21 +121,6 @@ export default function AdminOrders() {
           <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           Actualiser
         </button>
-      </div>
-
-      {/* Stats Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-        {allStatuses.map(s => {
-          const count = orders.filter(o => o.status === s).length;
-          const cfg = STATUS_CONFIG[s];
-          return (
-            <div key={s} className="card" style={{ textAlign: 'center', padding: '1rem', cursor: 'pointer', borderColor: filterStatus === s ? cfg.color : undefined }}
-              onClick={() => setFilterStatus(prev => prev === s ? '' : s)}>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: cfg.color }}>{count}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{cfg.label}</div>
-            </div>
-          );
-        })}
       </div>
 
       {/* Filter Pills */}
@@ -165,16 +156,16 @@ export default function AdminOrders() {
       )}
 
       {/* Orders List */}
-      {!loading && orders.length === 0 && !error && (
+      {!loading && filteredOrders.length === 0 && !error && (
         <div className="card" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
           Aucune commande trouvée.
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {orders.map(order => {
-          const cfg = STATUS_CONFIG[order.status];
-          const transitions = STATUS_TRANSITIONS[order.status];
+        {filteredOrders.map(order => {
+          const cfg = STATUS_CONFIG[order.status] || { label: order.status || 'Inconnu', color: '#9CA3AF', icon: <Clock size={14} /> };
+          const transitions = STATUS_TRANSITIONS[order.status] || [];
           const isExpanded = expandedId === order.id;
 
           return (

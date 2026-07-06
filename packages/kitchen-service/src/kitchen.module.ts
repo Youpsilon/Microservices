@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { KitchenController } from './kitchen.controller';
 import { KitchenService } from './kitchen.service';
+import { OutboxPoller } from './outbox-poller.service';
 import { KitchenTicket, TicketItem, Outbox, ProcessedEvent } from './entities/kitchen.entity';
 
 @Module({
@@ -21,6 +22,7 @@ import { KitchenTicket, TicketItem, Outbox, ProcessedEvent } from './entities/ki
     TypeOrmModule.forFeature([KitchenTicket, TicketItem, Outbox, ProcessedEvent]),
   ],
   controllers: [KitchenController],
-  providers: [KitchenService],
+  providers: [KitchenService, OutboxPoller],
 })
 export class KitchenModule {}
+

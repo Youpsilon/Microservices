@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { KitchenTicket, TicketItem, Outbox, ProcessedEvent } from './entities/kitchen.entity';
 import {
-  DomainEvent, OrderPlacedPayload, EventTypes, Exchanges, KitchenItemStatus,
+  DomainEvent, OrderPlacedPayload, EventTypes, Exchanges, KitchenItemStatus, OrderStatus,
 } from '@restaurant/shared-types';
 import { connectAmqp, setupExchange, setupQueue, consumeWithIdempotency, publishEvent } from '@restaurant/amqp-utils';
 import * as amqp from 'amqplib';
@@ -28,12 +28,22 @@ export class KitchenService {
       await setupExchange(this.channel, Exchanges.KITCHEN);
       await setupQueue(this.channel, 'kitchen.order-placed', Exchanges.ORDER, EventTypes.ORDER_PLACED);
       await setupQueue(this.channel, 'kitchen.order-cancelled', Exchanges.ORDER, EventTypes.ORDER_CANCELLED);
+      await setupQueue(this.channel, 'kitchen.order-status-updated.v1', Exchanges.ORDER, 'order.status.updated');
 
       // Start consuming OrderPlaced events
       await consumeWithIdempotency(
         this.channel,
         'kitchen.order-placed',
         (event) => this.handleOrderPlaced(event as DomainEvent<OrderPlacedPayload>),
+        (msgId) => this.processedRepo.findOne({ where: { messageId: msgId } }).then((e) => !!e),
+        (msgId) => this.processedRepo.save(this.processedRepo.create({ messageId: msgId })).then(() => {}),
+      );
+
+      // Start consuming OrderStatusUpdated events
+      await consumeWithIdempotency(
+        this.channel,
+        'kitchen.order-status-updated.v1',
+        (event) => this.handleOrderStatusUpdated(event as DomainEvent<{ orderId: string; status: OrderStatus }>),
         (msgId) => this.processedRepo.findOne({ where: { messageId: msgId } }).then((e) => !!e),
         (msgId) => this.processedRepo.save(this.processedRepo.create({ messageId: msgId })).then(() => {}),
       );
@@ -123,6 +133,31 @@ export class KitchenService {
     return saved;
   }
 
+  // ─── Accept Entire Ticket ───
+  async acceptTicket(ticketId: string): Promise<KitchenTicket> {
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    if (ticket.status !== 'pending') throw new BadRequestException('Ticket is not pending');
+
+    ticket.status = 'preparing';
+    const saved = await this.ticketRepo.save(ticket);
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.save(Outbox, {
+        aggregateType: 'Kitchen',
+        aggregateId: ticket.orderId,
+        eventType: EventTypes.ORDER_VALIDATED,
+        payload: {
+          orderId: ticket.orderId,
+          ticketId: ticket.id,
+          acceptedAt: new Date().toISOString(),
+        },
+      });
+    });
+
+    return saved;
+  }
+
   // ─── Mark Entire Ticket Ready ───
   async markTicketReady(ticketId: string): Promise<KitchenTicket> {
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId }, relations: { items: true } });
@@ -154,6 +189,27 @@ export class KitchenService {
     const allReady = ticket.items.every((i) => i.status === 'ready');
     if (allReady) {
       await this.markTicketReady(ticketId);
+    }
+  }
+
+  private async handleOrderStatusUpdated(event: DomainEvent<{ orderId: string; status: OrderStatus }>): Promise<void> {
+    const { orderId, status } = event.payload;
+    const ticket = await this.ticketRepo.findOne({ where: { orderId } });
+    if (!ticket) return;
+
+    let targetTicketStatus = '';
+    if (status === OrderStatus.PREPARING) {
+      targetTicketStatus = 'preparing';
+    } else if (status === OrderStatus.READY) {
+      targetTicketStatus = 'ready';
+    } else if (status === OrderStatus.CANCELLED) {
+      targetTicketStatus = 'cancelled';
+    }
+
+    if (targetTicketStatus && ticket.status !== targetTicketStatus) {
+      ticket.status = targetTicketStatus;
+      await this.ticketRepo.save(ticket);
+      this.logger.log(`Updated kitchen ticket for order ${orderId} to ${targetTicketStatus} due to order status update`);
     }
   }
 }

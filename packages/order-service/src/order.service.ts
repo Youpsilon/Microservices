@@ -152,14 +152,54 @@ export class OrderService {
         payload: { orderId: saved.id, customerId, cancelledAt: new Date().toISOString() },
       });
 
+      await manager.save(Outbox, {
+        aggregateType: 'Order',
+        aggregateId: saved.id,
+        eventType: 'order.status.updated',
+        payload: { orderId: saved.id, status: OrderStatus.CANCELLED },
+      });
+
       return saved;
     });
   }
 
   // ─── Update Order Status (called by saga/event consumers) ───
   async updateStatus(orderId: string, newStatus: OrderStatus): Promise<Order> {
-    const order = await this.getOrderById(orderId);
-    order.status = newStatus;
-    return this.orderRepo.save(order);
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, { where: { id: orderId } });
+      if (!order) throw new NotFoundException('Order not found');
+      order.status = newStatus;
+      const saved = await manager.save(order);
+
+      await manager.save(Outbox, {
+        aggregateType: 'Order',
+        aggregateId: saved.id,
+        eventType: 'order.status.updated',
+        payload: { orderId: saved.id, status: newStatus },
+      });
+
+      return saved;
+    });
+  }
+
+  // ─── Confirm Reception (client confirms delivery) ───
+  async confirmReception(orderId: string, customerId: string): Promise<Order> {
+    const order = await this.orderRepo.findOne({
+      where: { id: orderId },
+      relations: { items: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    if (order.customerId !== customerId) {
+      throw new BadRequestException('You can only confirm your own orders');
+    }
+
+    if (order.status !== OrderStatus.DELIVERED) {
+      throw new BadRequestException(
+        `Cannot confirm order in status "${order.status}". Order must be delivered first.`,
+      );
+    }
+
+    return this.updateStatus(orderId, OrderStatus.COMPLETED);
   }
 }

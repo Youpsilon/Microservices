@@ -130,55 +130,174 @@ services:
       COLLECTOR_OTLP_ENABLED: 'true'
 
   # ─── Application Services ───
-  # NOTE: These services are defined here for Chaos Testing demos (docker stop <container>).
-  # For development, use 'npm run dev:<service>' scripts which provide hot-reload.
-  # To start all services in Docker: uncomment and run 'docker compose --profile full up -d'
+  # To start all services in Docker: run 'docker compose --profile full up -d'
 
-  # kitchen-service:
-  #   build:
-  #     context: .
-  #     dockerfile: packages/kitchen-service/Dockerfile
-  #   container_name: kitchen-service
-  #   profiles: ['full']
-  #   environment:
-  #     DB_HOST: postgres-kitchen
-  #     DB_PORT: 5432
-  #     DB_USER: postgres
-  #     DB_PASSWORD: dev
-  #     DB_NAME: kitchen
-  #     AMQP_URL: amqp://guest:guest@rabbitmq:5672
-  #     JWT_SECRET: dev-secret-change-in-prod
-  #     PORT: 3004
-  #   ports:
-  #     - '3004:3004'
-  #   depends_on:
-  #     postgres-kitchen:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npx ts-node -r tsconfig-paths/register --project packages/auth-service/tsconfig.json packages/auth-service/src/main.ts
+    container_name: auth-service
+    profiles: ['full']
+    environment:
+      DB_HOST: postgres-auth
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: dev
+      DB_NAME: auth
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: dev-secret-change-in-prod
+      PORT: 3001
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
-  # delivery-service:
-  #   build:
-  #     context: .
-  #     dockerfile: packages/delivery-service/Dockerfile
-  #   container_name: delivery-service
-  #   profiles: ['full']
-  #   environment:
-  #     DB_HOST: postgres-delivery
-  #     DB_PORT: 5432
-  #     DB_USER: postgres
-  #     DB_PASSWORD: dev
-  #     DB_NAME: delivery
-  #     AMQP_URL: amqp://guest:guest@rabbitmq:5672
-  #     JWT_SECRET: dev-secret-change-in-prod
-  #     PORT: 3005
-  #   ports:
-  #     - '3005:3005'
-  #   depends_on:
-  #     postgres-delivery:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
+  menu-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npx ts-node -r tsconfig-paths/register --project packages/menu-service/tsconfig.json packages/menu-service/src/main.ts
+    container_name: menu-service
+    profiles: ['full']
+    environment:
+      DB_HOST: postgres-menu
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: dev
+      DB_NAME: menu
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+      PORT: 3002
+    ports:
+      - '3002:3002'
+    depends_on:
+      postgres-menu:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npx ts-node -r tsconfig-paths/register --project packages/order-service/tsconfig.json packages/order-service/src/main.ts
+    container_name: order-service
+    profiles: ['full']
+    environment:
+      DB_HOST: postgres-orders
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: dev
+      DB_NAME: orders
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+      PORT: 3003
+    ports:
+      - '3003:3003'
+    depends_on:
+      postgres-orders:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  kitchen-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npx ts-node -r tsconfig-paths/register --project packages/kitchen-service/tsconfig.json packages/kitchen-service/src/main.ts
+    container_name: kitchen-service
+    profiles: ['full']
+    environment:
+      DB_HOST: postgres-kitchen
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: dev
+      DB_NAME: kitchen
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: dev-secret-change-in-prod
+      PORT: 3004
+    ports:
+      - '3004:3004'
+    depends_on:
+      postgres-kitchen:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  delivery-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npx ts-node -r tsconfig-paths/register --project packages/delivery-service/tsconfig.json packages/delivery-service/src/main.ts
+    container_name: delivery-service
+    profiles: ['full']
+    environment:
+      DB_HOST: postgres-delivery
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: dev
+      DB_NAME: delivery
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: dev-secret-change-in-prod
+      PORT: 3005
+    ports:
+      - '3005:3005'
+    depends_on:
+      postgres-delivery:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npx ts-node -r tsconfig-paths/register --project packages/api-gateway/tsconfig.json packages/api-gateway/src/main.ts
+    container_name: api-gateway
+    profiles: ['full']
+    environment:
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+      MENU_SERVICE_URL: http://menu-service:3002/api/menu
+      ORDER_SERVICE_URL: http://order-service:3003/api
+      KITCHEN_SERVICE_URL: http://kitchen-service:3004/api
+      DELIVERY_SERVICE_URL: http://delivery-service:3005/api
+      AUTH_SERVICE_URL: http://auth-service:3001/api
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
+  web-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npm run dev -w packages/web-client -- --host
+    container_name: web-client
+    profiles: ['full']
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:3001
+      MENU_SERVICE_URL: http://menu-service:3002
+      ORDER_SERVICE_URL: http://order-service:3003
+      KITCHEN_SERVICE_URL: http://kitchen-service:3004
+      DELIVERY_SERVICE_URL: http://delivery-service:3005
+    ports:
+      - '5173:5173'
+    depends_on:
+      - auth-service
+      - menu-service
+      - order-service
+      - kitchen-service
+      - delivery-service
+      - api-gateway
 
 volumes:
   pg-auth-data:

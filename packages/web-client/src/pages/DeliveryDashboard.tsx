@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
-import { Bike, MapPin, CheckCircle2, Clock, RefreshCw, Package, User } from 'lucide-react';
+import { Bike, MapPin, CheckCircle2, Clock, RefreshCw, Package, User, Zap } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 
 interface Courier {
   id: string;
@@ -52,7 +53,7 @@ const STATUS_TRANSITION_LABELS: Record<string, string> = {
 export default function DeliveryDashboard() {
   const queryClient = useQueryClient();
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('assigned,picked_up');
+  const [statusFilter, setStatusFilter] = useState<string>('pending,assigned,picked_up');
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -60,10 +61,9 @@ export default function DeliveryDashboard() {
   };
 
   const { data: deliveries = [], isLoading: deliveriesLoading, refetch, isFetching } = useQuery({
-    queryKey: ['deliveries', statusFilter],
+    queryKey: ['deliveries'],
     queryFn: async () => {
-      const params = statusFilter && statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const { data } = await api.get(`/deliveries${params}`);
+      const { data } = await api.get('/deliveries');
       return data as Delivery[];
     },
     refetchInterval: 10000,
@@ -99,10 +99,43 @@ export default function DeliveryDashboard() {
     onError: () => showToast('Erreur', 'error'),
   });
 
-  const pendingCount   = deliveries.filter(d => d.status === 'pending').length;
-  const activeCount    = deliveries.filter(d => ['assigned', 'picked_up', 'in_transit'].includes(d.status)).length;
-  const completedCount = deliveries.filter(d => d.status === 'completed').length;
-  const availableCouriers = couriers.filter(c => c.status === 'available').length;
+  const selfAssignMutation = useMutation({
+    mutationFn: ({ deliveryId, courierId }: { deliveryId: string; courierId: string }) =>
+      api.post(`/deliveries/${deliveryId}/assign`, { courierId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['couriers'] });
+      showToast('🚴 Livraison assignée ! Bonne route !');
+    },
+    onError: (err: any) => showToast(err.response?.data?.message || 'Erreur', 'error'),
+  });
+
+  // Find the current user's courier profile (matched by name from auth store, fallback to first courier)
+  const { user } = useAuthStore();
+  const myCourier = couriers.find(c =>
+    user && c.name.toLowerCase().includes(user.name?.split(' ')[0]?.toLowerCase() || '')
+  ) || couriers[0];
+
+  const filteredDeliveries = deliveries.filter(delivery => {
+    if (statusFilter === 'pending,assigned,picked_up') {
+      // "À livrer & En cours"
+      const isPending = !delivery.courierId || delivery.status === 'pending';
+      const isMine = myCourier && delivery.courierId === myCourier.id && ['assigned', 'picked_up', 'in_transit'].includes(delivery.status);
+      return isPending || isMine;
+    }
+    if (statusFilter === 'pending') {
+      // "En attente"
+      return !delivery.courierId || delivery.status === 'pending';
+    }
+    if (statusFilter === 'completed') {
+      // "Terminées"
+      return myCourier && delivery.courierId === myCourier.id && delivery.status === 'completed';
+    }
+    if (statusFilter === 'all') {
+      return true;
+    }
+    return true;
+  });
 
   return (
     <div style={{ position: 'relative' }}>
@@ -133,20 +166,6 @@ export default function DeliveryDashboard() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
-        {[
-          { label: 'En attente',   value: pendingCount,   color: '#FCD34D' },
-          { label: 'En cours',     value: activeCount,    color: '#F97316' },
-          { label: 'Livrées',      value: completedCount, color: '#34D399' },
-          { label: 'Livreurs dispo', value: availableCouriers, color: '#60A5FA' },
-        ].map(stat => (
-          <div key={stat.label} className="card" style={{ textAlign: 'center', padding: '1.25rem' }}>
-            <div style={{ fontSize: '2.25rem', fontWeight: 900, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', alignItems: 'start' }}>
         {/* Deliveries List */}
@@ -154,10 +173,10 @@ export default function DeliveryDashboard() {
           {/* Filter Pills */}
           <div className="categories-filter" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem' }}>
             {[
-              { value: 'assigned,picked_up',  label: 'En cours' },
-              { value: 'pending',              label: 'En attente' },
-              { value: 'completed',            label: 'Terminées' },
-              { value: 'all',                  label: 'Toutes' },
+              { value: 'pending,assigned,picked_up', label: 'À livrer & En cours' },
+              { value: 'pending',                    label: 'En attente' },
+              { value: 'completed',                  label: 'Terminées' },
+              { value: 'all',                        label: 'Toutes' },
             ].map(opt => (
               <button
                 key={opt.value}
@@ -174,14 +193,14 @@ export default function DeliveryDashboard() {
             <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
               Chargement des livraisons...
             </div>
-          ) : deliveries.length === 0 ? (
+          ) : filteredDeliveries.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
               <Package size={48} style={{ margin: '0 auto 1rem', opacity: 0.4 }} />
               <p>Aucune livraison pour ce filtre.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {deliveries.map(delivery => {
+              {filteredDeliveries.map(delivery => {
                 const cfg = DELIVERY_STATUS_CONFIG[delivery.status] ?? DELIVERY_STATUS_CONFIG.pending;
                 const nextStatus = STATUS_TRANSITIONS[delivery.status];
 
@@ -217,6 +236,18 @@ export default function DeliveryDashboard() {
                         }}>
                           {cfg.icon} {cfg.label}
                         </span>
+
+                        {/* Self-assign button for pending deliveries */}
+                        {delivery.status === 'pending' && myCourier && (
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                            disabled={selfAssignMutation.isPending}
+                            onClick={() => selfAssignMutation.mutate({ deliveryId: delivery.id, courierId: myCourier.id })}
+                          >
+                            <Zap size={14} /> S'assigner
+                          </button>
+                        )}
 
                         {nextStatus && (
                           <button

@@ -1,6 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
+const MENU_SERVICE_URL = process.env.MENU_SERVICE_URL || 'http://localhost:3002';
+const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:3003';
+const KITCHEN_SERVICE_URL = process.env.KITCHEN_SERVICE_URL || 'http://localhost:3004';
+const DELIVERY_SERVICE_URL = process.env.DELIVERY_SERVICE_URL || 'http://localhost:3005';
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -8,35 +14,35 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api/auth': {
-        target: 'http://localhost:3001',
+        target: AUTH_SERVICE_URL,
         changeOrigin: true,
       },
       '/api/users': {
-        target: 'http://localhost:3001',
+        target: AUTH_SERVICE_URL,
         changeOrigin: true,
       },
       '/api/menu': {
-        target: 'http://localhost:3002', // Menu service directly (supports GET + PATCH)
+        target: MENU_SERVICE_URL, // Menu service directly (supports GET + PATCH)
         changeOrigin: true,
       },
       '/api/orders': {
-        target: 'http://localhost:3003', // Order service directly (supports GET, PATCH etc)
+        target: ORDER_SERVICE_URL, // Order service directly (supports GET, PATCH etc)
         changeOrigin: true,
       },
       '/api/cart': {
-        target: 'http://localhost:3003', 
+        target: ORDER_SERVICE_URL, 
         changeOrigin: true,
       },
       '/api/kitchen': {
-        target: 'http://localhost:3004',
+        target: KITCHEN_SERVICE_URL,
         changeOrigin: true,
       },
       '/api/deliveries': {
-        target: 'http://localhost:3005',
+        target: DELIVERY_SERVICE_URL,
         changeOrigin: true,
       },
       '/api/couriers': {
-        target: 'http://localhost:3005',
+        target: DELIVERY_SERVICE_URL,
         changeOrigin: true,
       },
     },

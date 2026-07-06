@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Courier, Delivery, CourierLocation, Outbox, ProcessedEvent } from './entities/delivery.entity';
 import {
-  DomainEvent, EventTypes, Exchanges, OrderReadyForPickupPayload,
+  DomainEvent, EventTypes, Exchanges, OrderReadyForPickupPayload, OrderStatus,
 } from '@restaurant/shared-types';
 import { connectAmqp, setupExchange, setupQueue, consumeWithIdempotency } from '@restaurant/amqp-utils';
 import * as amqp from 'amqplib';
@@ -28,11 +28,20 @@ export class DeliveryService {
       await setupExchange(this.channel, Exchanges.KITCHEN);
       await setupExchange(this.channel, Exchanges.DELIVERY);
       await setupQueue(this.channel, 'delivery.order-ready', Exchanges.KITCHEN, EventTypes.ORDER_READY_FOR_PICKUP);
+      await setupQueue(this.channel, 'delivery.order-status-updated.v1', Exchanges.ORDER, 'order.status.updated');
 
       await consumeWithIdempotency(
         this.channel,
         'delivery.order-ready',
         (event) => this.handleOrderReady(event as DomainEvent<OrderReadyForPickupPayload>),
+        (msgId) => this.processedRepo.findOne({ where: { messageId: msgId } }).then((e) => !!e),
+        (msgId) => this.processedRepo.save(this.processedRepo.create({ messageId: msgId })).then(() => {}),
+      );
+
+      await consumeWithIdempotency(
+        this.channel,
+        'delivery.order-status-updated.v1',
+        (event) => this.handleOrderStatusUpdated(event as DomainEvent<{ orderId: string; status: OrderStatus }>),
         (msgId) => this.processedRepo.findOne({ where: { messageId: msgId } }).then((e) => !!e),
         (msgId) => this.processedRepo.save(this.processedRepo.create({ messageId: msgId })).then(() => {}),
       );
@@ -55,13 +64,7 @@ export class DeliveryService {
     });
     await this.deliveryRepo.save(delivery);
 
-    // Auto-assign to an available courier
-    const availableCourier = await this.courierRepo.findOne({ where: { status: 'available' } });
-    if (availableCourier) {
-      await this.assignDelivery(delivery.id, availableCourier.id);
-    }
-
-    this.logger.log(`Delivery created for order ${orderId}`);
+    this.logger.log(`Delivery created for order ${orderId}, pending assignment`);
   }
 
   // ─── Couriers ───
@@ -161,6 +164,10 @@ export class DeliveryService {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
 
+    if (!delivery.courierId) {
+      throw new BadRequestException('Delivery has no assigned courier');
+    }
+
     await this.locationRepo.save(this.locationRepo.create({
       courierId: delivery.courierId,
       deliveryId,
@@ -175,18 +182,70 @@ export class DeliveryService {
   }
 
   private async seedCouriers() {
+    const exists = await this.courierRepo.findOne({ where: { name: 'Pierre Livreur' } });
     const count = await this.courierRepo.count();
-    if (count > 0) return;
 
-    const couriers = [
-      { name: 'Jean Dupont', phone: '0612345678', vehicle: 'scooter', status: 'available' },
-      { name: 'Marie Martin', phone: '0687654321', vehicle: 'bike', status: 'available' },
-      { name: 'Pierre Durand', phone: '0698765432', vehicle: 'car', status: 'offline' },
-    ];
-
-    for (const c of couriers) {
-      await this.courierRepo.save(this.courierRepo.create(c));
+    // If there are other couriers in the DB, clean them up to ensure Pierre Livreur is the only one
+    if (count > 1 || (count === 1 && !exists)) {
+      this.logger.log('Cleaning up old couriers and references...');
+      await this.locationRepo.createQueryBuilder().delete().execute();
+      await this.deliveryRepo.createQueryBuilder().update().set({ courierId: null }).execute();
+      await this.courierRepo.createQueryBuilder().delete().execute();
     }
-    this.logger.log('Seeded default couriers');
+
+    const newCount = await this.courierRepo.count();
+    if (newCount === 0) {
+      await this.courierRepo.save(
+        this.courierRepo.create({
+          name: 'Pierre Livreur',
+          phone: '0612345678',
+          vehicle: 'scooter',
+          status: 'available',
+        })
+      );
+      this.logger.log('Seeded Pierre Livreur');
+    }
+  }
+
+  private async handleOrderStatusUpdated(event: DomainEvent<{ orderId: string; status: OrderStatus }>): Promise<void> {
+    const { orderId, status } = event.payload;
+    let delivery = await this.deliveryRepo.findOne({ where: { orderId }, relations: { courier: true } });
+
+    if (status === OrderStatus.READY) {
+      if (!delivery) {
+        delivery = this.deliveryRepo.create({
+          orderId,
+          status: 'pending',
+        });
+        await this.deliveryRepo.save(delivery);
+        this.logger.log(`Created delivery for order ${orderId} due to READY status update`);
+      }
+    } else if (status === OrderStatus.DELIVERING) {
+      if (delivery && delivery.status !== 'picked_up') {
+        delivery.status = 'picked_up';
+        await this.deliveryRepo.save(delivery);
+        this.logger.log(`Updated delivery status to picked_up for order ${orderId} due to status update`);
+      }
+    } else if (status === OrderStatus.DELIVERED || status === OrderStatus.COMPLETED) {
+      if (delivery && delivery.status !== 'completed') {
+        delivery.status = 'completed';
+        const saved = await this.deliveryRepo.save(delivery);
+        if (saved.courier) {
+          saved.courier.status = 'available';
+          await this.courierRepo.save(saved.courier);
+        }
+        this.logger.log(`Updated delivery status to completed for order ${orderId} due to status update`);
+      }
+    } else if (status === OrderStatus.CANCELLED) {
+      if (delivery && delivery.status !== 'cancelled') {
+        delivery.status = 'cancelled';
+        const saved = await this.deliveryRepo.save(delivery);
+        if (saved.courier) {
+          saved.courier.status = 'available';
+          await this.courierRepo.save(saved.courier);
+        }
+        this.logger.log(`Cancelled delivery for order ${orderId} due to status update`);
+      }
+    }
   }
 }

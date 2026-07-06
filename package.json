@@ -12,7 +12,8 @@
     "dev:kitchen": "npx ts-node -r tsconfig-paths/register --project packages/kitchen-service/tsconfig.json packages/kitchen-service/src/main.ts",
     "dev:delivery": "npx ts-node -r tsconfig-paths/register --project packages/delivery-service/tsconfig.json packages/delivery-service/src/main.ts",
     "dev:gateway": "npx ts-node -r tsconfig-paths/register --project packages/api-gateway/tsconfig.json packages/api-gateway/src/main.ts",
-    "dev:web": "npm run dev -w packages/web-client"
+    "dev:web": "npm run dev -w packages/web-client",
+    "dev:all": "npx concurrently -n \"auth,menu,order,kitchen,delivery,gateway,web\" -c \"blue,green,magenta,yellow,cyan,white,red\" \"npm:dev:auth\" \"npm:dev:menu\" \"npm:dev:order\" \"npm:dev:kitchen\" \"npm:dev:delivery\" \"npm:dev:gateway\" \"npm:dev:web\""
   },
   "private": true,
   "dependencies": {

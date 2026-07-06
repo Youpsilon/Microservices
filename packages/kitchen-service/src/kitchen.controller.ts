@@ -28,6 +28,12 @@ export class KitchenController {
     return this.kitchenService.updateItemStatus(itemId, dto.status);
   }
 
+  @Post('kitchen/orders/:ticketId/accept')
+  @Auth(Role.CHEF, Role.ADMIN)
+  acceptTicket(@Param('ticketId', ParseUUIDPipe) ticketId: string) {
+    return this.kitchenService.acceptTicket(ticketId);
+  }
+
   @Post('kitchen/orders/:ticketId/ready')
   @Auth(Role.CHEF, Role.ADMIN)
   markReady(@Param('ticketId', ParseUUIDPipe) ticketId: string) {

@@ -101,4 +101,15 @@ export class OrderController {
     const order = await this.orderService.cancelOrder(id, user.sub);
     return { orderId: order.id, status: order.status };
   }
+
+  @Post('orders/:id/confirm')
+  @Auth(Role.CLIENT, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async confirmReception(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const order = await this.orderService.confirmReception(id, user.sub);
+    return { orderId: order.id, status: order.status };
+  }
 }

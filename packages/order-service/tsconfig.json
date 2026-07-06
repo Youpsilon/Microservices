@@ -1,8 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../dist/order-service",
-    "rootDir": "src"
+    "outDir": "../../dist/order-service"
   },
   "include": ["src/**/*"]
 }

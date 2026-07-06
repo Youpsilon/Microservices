@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
-import { PackageCheck, Clock, ChefHat, Bike, CheckCircle, XCircle, RefreshCw, ShoppingBag } from 'lucide-react';
+import { PackageCheck, Clock, ChefHat, Bike, CheckCircle, XCircle, RefreshCw, ShoppingBag, ThumbsUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface OrderItem {
@@ -23,16 +23,17 @@ interface Order {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode; description: string }> = {
   pending:   { label: 'Reçue',          color: '#FCD34D', icon: <Clock size={16} />,        description: 'Votre commande a bien été reçue et attend confirmation.' },
-  confirmed: { label: 'Confirmée',      color: '#60A5FA', icon: <CheckCircle size={16} />,  description: 'Votre commande est confirmée, la cuisine va démarrer.' },
+  confirmed: { label: 'Confirmée',      color: '#60A5FA', icon: <CheckCircle size={16} />,  description: 'Votre commande est confirmée.' },
   preparing: { label: 'En préparation', color: '#F97316', icon: <ChefHat size={16} />,      description: 'Le chef prépare votre commande en ce moment.' },
-  ready:     { label: 'Prête',          color: '#34D399', icon: <PackageCheck size={16} />, description: 'Votre commande est prête !' },
-  delivered: { label: 'Livrée',         color: '#A78BFA', icon: <Bike size={16} />,         description: 'Votre commande a été livrée. Bon appétit !' },
-  completed: { label: 'Terminée',       color: '#A78BFA', icon: <CheckCircle size={16} />,  description: 'Commande terminée.' },
+  ready:     { label: 'Prête',          color: '#34D399', icon: <PackageCheck size={16} />, description: 'Votre commande est prête ! En attente d\'un livreur.' },
+  delivering:{ label: 'En route',       color: '#8B5CF6', icon: <Bike size={16} />,         description: 'Le livreur est en route avec votre commande !' },
+  delivered: { label: 'Livrée',         color: '#A78BFA', icon: <CheckCircle size={16} />,  description: 'Votre commande a été livrée. Bon appétit !' },
+  completed: { label: 'Terminée',       color: '#10B981', icon: <CheckCircle size={16} />,  description: 'Commande terminée.' },
   cancelled: { label: 'Annulée',        color: '#F87171', icon: <XCircle size={16} />,      description: 'Cette commande a été annulée.' },
 };
 
 // Order progress steps
-const PROGRESS_STEPS = ['pending', 'confirmed', 'preparing', 'ready', 'delivered'];
+const PROGRESS_STEPS = ['pending', 'preparing', 'ready', 'delivering', 'delivered'];
 
 function OrderProgressBar({ status }: { status: string }) {
   const currentIdx = PROGRESS_STEPS.indexOf(status);
@@ -82,6 +83,13 @@ function OrderProgressBar({ status }: { status: string }) {
 
 export default function MyOrders() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const queryClient = useQueryClient();
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const { data: result, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['my-orders'],
@@ -92,10 +100,32 @@ export default function MyOrders() {
     refetchInterval: 15000,
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: (orderId: string) => api.post(`/orders/${orderId}/confirm`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+      showToast('✅ Réception confirmée ! Merci et bon appétit !');
+    },
+    onError: (err: any) => showToast(err.response?.data?.message || 'Erreur', 'error'),
+  });
+
   const orders = result?.data ?? [];
 
   return (
     <div>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 9999,
+          background: toast.type === 'success' ? 'rgba(16,185,129,0.95)' : 'rgba(239,68,68,0.95)',
+          color: '#fff', padding: '0.85rem 1.5rem', borderRadius: '12px',
+          fontWeight: 600, backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.3)',
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
         <div>
@@ -201,6 +231,32 @@ export default function MyOrders() {
                     }}>
                       {cfg.icon} {cfg.description}
                     </div>
+
+                    {/* Confirm reception button for delivered orders */}
+                    {order.status === 'delivered' && (
+                      <div style={{
+                        background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)',
+                        borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem',
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#A78BFA', marginBottom: '0.2rem' }}>
+                            🛵 Votre commande est arrivée !
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            Confirmez la réception pour clore la commande.
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-primary"
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
+                          disabled={confirmMutation.isPending}
+                          onClick={(e) => { e.stopPropagation(); confirmMutation.mutate(order.id); }}
+                        >
+                          <ThumbsUp size={16} /> Confirmer la réception
+                        </button>
+                      </div>
+                    )}
 
                     {/* Items */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

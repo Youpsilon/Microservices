@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import { ChefHat, Clock, Flame, CheckCircle2, RefreshCw, Package } from 'lucide-react';
@@ -26,8 +26,9 @@ const ITEM_STATUS_CONFIG = {
   ready:       { label: 'Prêt',           color: '#34D399', icon: <CheckCircle2 size={13} /> },
 };
 
-const TICKET_STATUS_CONFIG = {
-  pending:   { label: 'Nouveau',          color: '#FCD34D', dot: '#FCD34D' },
+const TICKET_STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
+  pending:   { label: 'Nouveau',          color: '#EF4444', dot: '#EF4444' }, // red to show action needed
+  accepted:  { label: 'Accepté',          color: '#FCD34D', dot: '#FCD34D' },
   preparing: { label: 'En préparation',   color: '#F97316', dot: '#F97316' },
   ready:     { label: 'Prêt à servir',    color: '#34D399', dot: '#34D399' },
 };
@@ -49,8 +50,8 @@ export default function KitchenDashboard() {
   };
 
   const { data: tickets = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['kitchen-tickets', statusFilter],
-    queryFn: () => fetchTickets(statusFilter),
+    queryKey: ['kitchen-tickets'],
+    queryFn: () => fetchTickets('all'),
     refetchInterval: 10000, // Auto-refresh every 10s
   });
 
@@ -73,9 +74,23 @@ export default function KitchenDashboard() {
     onError: () => showToast('Erreur', 'error'),
   });
 
-  const pendingCount   = tickets.filter(t => t.status === 'pending').length;
-  const preparingCount = tickets.filter(t => t.status === 'preparing').length;
-  const readyCount     = tickets.filter(t => t.status === 'ready').length;
+  const acceptTicketMutation = useMutation({
+    mutationFn: (ticketId: string) => api.post(`/kitchen/orders/${ticketId}/accept`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-tickets'] });
+      showToast('Commande acceptée !');
+    },
+    onError: () => showToast('Erreur lors de l\'acceptation', 'error'),
+  });
+
+
+  const filteredTickets = tickets.filter(t => {
+    if (statusFilter === 'pending,preparing') {
+      return ['pending', 'preparing'].includes(t.status);
+    }
+    if (statusFilter === 'all') return true;
+    return t.status === statusFilter;
+  });
 
   return (
     <div style={{ position: 'relative' }}>
@@ -106,19 +121,6 @@ export default function KitchenDashboard() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
-        {[
-          { label: 'Nouveaux', value: pendingCount,   color: '#FCD34D' },
-          { label: 'En préparation', value: preparingCount, color: '#F97316' },
-          { label: 'Prêts',   value: readyCount,      color: '#34D399' },
-        ].map(stat => (
-          <div key={stat.label} className="card" style={{ textAlign: 'center', padding: '1.25rem' }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
 
       {/* Filter Pills */}
       <div className="categories-filter" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem' }}>
@@ -144,14 +146,14 @@ export default function KitchenDashboard() {
         <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
           Chargement des tickets...
         </div>
-      ) : tickets.length === 0 ? (
+      ) : filteredTickets.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
           <Package size={48} style={{ margin: '0 auto 1rem', opacity: 0.4 }} />
           <p>Aucun ticket pour ce filtre. Le fourneau est calme !</p>
         </div>
       ) : (
         <div className="grid grid-2" style={{ gap: '1.5rem' }}>
-          {tickets.map(ticket => {
+          {filteredTickets.map(ticket => {
             const cfg = TICKET_STATUS_CONFIG[ticket.status] ?? TICKET_STATUS_CONFIG.pending;
             const allItemsReady = ticket.items.every(i => i.status === 'ready');
 
@@ -205,7 +207,7 @@ export default function KitchenDashboard() {
 
                         {/* Item Status Toggle */}
                         <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          {item.status === 'pending' && (
+                          {item.status === 'pending' && ticket.status !== 'pending' && (
                             <button
                               className="btn btn-secondary"
                               style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#F97316', borderColor: 'rgba(249,115,22,0.3)' }}
@@ -239,8 +241,22 @@ export default function KitchenDashboard() {
                   })}
                 </div>
 
-                {/* Ticket Footer — Mark all ready */}
-                {ticket.status !== 'ready' && (
+                {/* Ticket Footer */}
+                {ticket.status === 'pending' && (
+                  <button
+                    className="btn btn-primary"
+                    style={{
+                      width: '100%',
+                      display: 'flex', justifyContent: 'center', gap: '0.5rem',
+                      background: 'var(--brand-primary)', color: '#fff',
+                    }}
+                    onClick={() => acceptTicketMutation.mutate(ticket.id)}
+                    disabled={acceptTicketMutation.isPending}
+                  >
+                    <CheckCircle2 size={18} /> Accepter la commande
+                  </button>
+                )}
+                {ticket.status !== 'ready' && ticket.status !== 'pending' && (
                   <button
                     className="btn btn-primary"
                     style={{

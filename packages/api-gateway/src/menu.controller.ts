@@ -5,12 +5,12 @@ import Redis from 'ioredis';
 @Controller('menu')
 export class MenuController {
   private redis: Redis;
-  private readonly MENU_SERVICE_URL = 'http://localhost:3002/api/menu';
+  private readonly MENU_SERVICE_URL = process.env.MENU_SERVICE_URL || 'http://localhost:3002/api/menu';
 
   constructor() {
     this.redis = new Redis({
-      host: 'localhost',
-      port: 6379,
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
     });
   }
 

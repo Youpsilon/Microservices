@@ -47,7 +47,7 @@ export class DeliveryController {
   }
 
   @Post('deliveries/:id/assign')
-  @Auth(Role.ADMIN)
+  @Auth(Role.COURIER, Role.ADMIN)
   assignDelivery(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignDeliveryDto,

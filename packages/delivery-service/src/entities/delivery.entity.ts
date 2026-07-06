@@ -30,7 +30,7 @@ export class Delivery {
   orderId: string;
 
   @Column({ name: 'courier_id', nullable: true })
-  courierId: string;
+  courierId: string | null;
 
   @ManyToOne(() => Courier, { nullable: true })
   @JoinColumn({ name: 'courier_id' })

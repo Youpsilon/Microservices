@@ -5,6 +5,8 @@ import { DeliveryController } from './delivery.controller';
 import { DeliveryService } from './delivery.service';
 import { Courier, Delivery, CourierLocation, Outbox, ProcessedEvent } from './entities/delivery.entity';
 
+import { OutboxPoller } from './outbox-poller.service';
+
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -21,6 +23,6 @@ import { Courier, Delivery, CourierLocation, Outbox, ProcessedEvent } from './en
     TypeOrmModule.forFeature([Courier, Delivery, CourierLocation, Outbox, ProcessedEvent]),
   ],
   controllers: [DeliveryController],
-  providers: [DeliveryService],
+  providers: [DeliveryService, OutboxPoller],
 })
 export class DeliveryModule {}
