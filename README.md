@@ -1,5 +1,7 @@
 # Le Gourmet — Architecture Microservices Restaurant
 
+Youenn Couesnon, Joran Caunegre, Lucas Martin
+
 Bienvenue dans le dépôt du projet de gestion de commandes pour restaurant, conçu en architecture microservices avec NestJS, TypeORM, RabbitMQ et React.
 
 ---
