@@ -21,10 +21,10 @@ async function seed() {
   const userRepo = dataSource.getRepository('users');
 
   const users = [
-    { email: 'admin@restaurant.com', password: 'Password123!', name: 'Sophie Admin', roles: ['admin'] },
-    { email: 'chef@restaurant.com', password: 'Password123!', name: 'Marco Chef', roles: ['chef'] },
-    { email: 'livreur@restaurant.com', password: 'Password123!', name: 'Pierre Livreur', roles: ['livreur'] },
-    { email: 'client@restaurant.com', password: 'Password123!', name: 'Alice Client', roles: ['client'] },
+    { email: 'admin@restaurant.fr', password: 'Admin123!', name: 'Sophie Admin', roles: ['admin'] },
+    { email: 'chef@restaurant.fr', password: 'Chef123!', name: 'Marco Chef', roles: ['chef'] },
+    { email: 'livreur@restaurant.fr', password: 'Livreur123!', name: 'Pierre Livreur', roles: ['livreur'] },
+    { email: 'client@restaurant.fr', password: 'Client123!', name: 'Alice Client', roles: ['client'] },
   ];
 
   for (const u of users) {
